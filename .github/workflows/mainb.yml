@@ -1,4 +1,4 @@
-name: Build and Upload Cobalt for Xbox (Fork Version)
+name: Build Cobalt for Xbox (UWP XAPP)
 
 on:
   push:
@@ -14,41 +14,40 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Repository auschecken
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Abhängigkeiten installieren
-        shell: powershell
-        run: |
-          choco install ninja nodejs python visualstudio2022buildtools visualstudio2022-workload-nativedesktop --yes
-          python -m pip install --upgrade pip
-          python -m pip install virtualenv
+        uses: msys2/setup-msys2@v2
+        with:
+          install: >-
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-nodejs
+            mingw-w64-x86_64-toolchain
 
       - name: Virtuelle Python-Umgebung einrichten
-        shell: powershell
+        shell: bash
         run: |
-          py -3 -m venv $env:HOME/.virtualenvs/cobalt_dev
-          $env:HOME/.virtualenvs/cobalt_dev/Scripts/activate
+          python -m venv ~/.virtualenvs/cobalt_dev
+          source ~/.virtualenvs/cobalt_dev/bin/activate
+          pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Pre-Commit Hooks installieren
-        shell: powershell
-        run: |
-          pre-commit install -t post-checkout -t pre-commit -t pre-push --allow-missing-config
-          git checkout -b build-branch origin/main
-
       - name: Cobalt für Xbox konfigurieren
-        shell: powershell
-        run: |
-          python cobalt/build/gn.py -c devel -p xb1
+        shell: bash
+        run: python cobalt/build/gn.py -c devel -p xb1
 
       - name: Cobalt für Xbox bauen
-        shell: powershell
-        run: |
-          ninja -C out/xb1_devel cobalt_install
+        shell: bash
+        run: ninja -C out/xb1_devel cobalt_install
 
-      - name: UWP XAPP als Artefakt speichern
-        uses: actions/upload-artifact@v3
+      - name: UWP XAPP erstellen
+        shell: bash
+        run: python starboard/xb1/tools/packager.py -s out/xb1_devel/ -o out/xb1_devel/package -p cobalt
+
+      - name: Build-Artefakt hochladen
+        uses: actions/upload-artifact@v4
         with:
           name: Cobalt-Xbox-UWP-XAPP
-          path: out/xb1_devel
+          path: out/xb1_devel/package/*.appx
           retention-days: 7
