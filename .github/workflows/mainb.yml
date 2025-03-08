@@ -1,0 +1,54 @@
+name: Build and Upload Cobalt for Xbox (Fork Version)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v3
+
+      - name: Abhängigkeiten installieren
+        shell: powershell
+        run: |
+          choco install ninja nodejs python visualstudio2022buildtools visualstudio2022-workload-nativedesktop --yes
+          python -m pip install --upgrade pip
+          python -m pip install virtualenv
+
+      - name: Virtuelle Python-Umgebung einrichten
+        shell: powershell
+        run: |
+          py -3 -m venv $env:HOME/.virtualenvs/cobalt_dev
+          $env:HOME/.virtualenvs/cobalt_dev/Scripts/activate
+          pip install -r requirements.txt
+
+      - name: Pre-Commit Hooks installieren
+        shell: powershell
+        run: |
+          pre-commit install -t post-checkout -t pre-commit -t pre-push --allow-missing-config
+          git checkout -b build-branch origin/main
+
+      - name: Cobalt für Xbox konfigurieren
+        shell: powershell
+        run: |
+          python cobalt/build/gn.py -c devel -p xb1
+
+      - name: Cobalt für Xbox bauen
+        shell: powershell
+        run: |
+          ninja -C out/xb1_devel cobalt_install
+
+      - name: UWP XAPP als Artefakt speichern
+        uses: actions/upload-artifact@v3
+        with:
+          name: Cobalt-Xbox-UWP-XAPP
+          path: out/xb1_devel
+          retention-days: 7
